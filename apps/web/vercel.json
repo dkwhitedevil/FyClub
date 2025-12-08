@@ -1,21 +1,6 @@
 {
-  "buildCommand": "cd apps/web && pnpm run build",
-  "installCommand": "pnpm install",
-  "outputDirectory": "apps/web/.next",
   "framework": "nextjs",
-  "regions": ["iad1"],
-  "env": {
-    "NEXT_PUBLIC_API_URL": {
-      "description": "Backend API URL (e.g., https://fyclub-api.onrender.com or your deployed ATP backend URL)"
-    },
-    "GEMINI_API_KEY": {
-      "description": "Gemini API key for optional features"
-    },
-    "RPC_URL": {
-      "description": "Ethereum RPC endpoint"
-    },
-    "QWEN_API_URL": {
-      "description": "Qwen LLM endpoint"
-    }
-  }
+  "buildCommand": "pnpm run build",
+  "installCommand": "pnpm install",
+  "outputDirectory": ".next"
 }
