@@ -18,7 +18,7 @@ export async function watchTreasury(address: string): Promise<TreasurySnapshot> 
 
   const balanceWei = await provider.getBalance(address);
   const balanceEth = Number(ethers.formatEther(balanceWei));
-  const ethPrice = 3000; // simple fixed price for now
+  const ethPrice = 3500; // Current approximate ETH price in USD
 
   const snapshot: TreasurySnapshot = {
     address: address,

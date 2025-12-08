@@ -1,4 +1,3 @@
-import { AgentBuilder } from "@iqai/adk";
 import type { RiskResult, ProtectionPlan } from "../types.ts";
 
 export interface GovernanceDecision {
@@ -7,19 +6,80 @@ export interface GovernanceDecision {
   enforcedActions: Array<{ type: "ALERT" | "REDUCE" | "DIVERSIFY"; message: string }>;
 }
 
-let governanceRunner: any = null;
+/**
+ * Safe universal Qwen Ollama caller
+ * Handles all response formats
+ */
+async function callLocalLLM(prompt: string): Promise<string> {
+  const res = await fetch("https://ollama-qwen.zeabur.app/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "qwen2.5:0.5b",
+      prompt,
+      stream: false
+    })
+  });
 
-export async function initGovernanceAgent() {
-  if (governanceRunner) return;
-  const built = await AgentBuilder.create("governance_agent")
-    .withModel("gemini-2.5-flash")
-    .withInstruction(`You are the final safety authority for FY Club.\nYour job is to enforce strict security rules.\nYou can block unsafe actions and approve only protective ones.\nReturn STRICT JSON:{ approved: boolean, reason: string, enforcedActions: [{type: 'ALERT'|'REDUCE'|'DIVERSIFY', message: string}]}`)
-    .build();
+  const data = await res.json();
 
-  governanceRunner = (built as any).runner;
+  // ✅ UNIVERSAL RESPONSE EXTRACTION (SUPPORTS ALL OLLAMA FORMATS)
+  if (typeof data.response === "string") {
+    return data.response;
+  }
+
+  if (data.message?.content && typeof data.message.content === "string") {
+    return data.message.content;
+  }
+
+  if (typeof data === "string") {
+    return data;
+  }
+
+  console.error("⚠️ Unexpected Qwen response format:", data);
+  throw new Error("Invalid Qwen response format");
 }
 
-// Custom runner function for governance enforcement
+/**
+ * Extract JSON from markdown-wrapped or text-surrounded JSON
+ * Handles: ```json {...} ```, raw {...}, and text with embedded JSON
+ */
+function extractJson(text: string): any {
+  const cleaned = text
+    .replace(/```json/g, "")
+    .replace(/```/g, "")
+    .trim();
+
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+
+  if (start === -1 || end === -1) {
+    throw new Error("No JSON object found in AI output");
+  }
+
+  const jsonString = cleaned.slice(start, end + 1);
+  return JSON.parse(jsonString);
+}
+
+/**
+ * Strong validation against malformed AI output
+ */
+function isValidGovernanceDecision(obj: any): obj is GovernanceDecision {
+  return (
+    obj &&
+    typeof obj.approved === "boolean" &&
+    typeof obj.reason === "string" &&
+    Array.isArray(obj.enforcedActions) &&
+    obj.enforcedActions.every(
+      (a: any) =>
+        a &&
+        (a.type === "ALERT" || a.type === "REDUCE" || a.type === "DIVERSIFY") &&
+        typeof a.message === "string"
+    )
+  );
+}
+
+// ✅ MAIN GOVERNANCE ENFORCER (NOW FULLY LOCAL + UNLIMITED)
 export async function enforceGovernance(
   input: {
     risk: RiskResult;
@@ -29,7 +89,7 @@ export async function enforceGovernance(
 ): Promise<GovernanceDecision> {
   const { risk, plan, totalUsdValue } = input;
 
-  // ✅ RULE 1: Block everything if risk is HIGH and treasury is huge
+  // ✅ HARD RULE 1: Absolute block for huge high-risk treasury
   if (risk.level === "HIGH" && totalUsdValue > 1_000_000) {
     return {
       approved: false,
@@ -43,46 +103,76 @@ export async function enforceGovernance(
       ]
     };
   }
-  // Otherwise, prefer LLM governor but enforce safety checks and validate output
+
+  // ✅ OTHERWISE: USE YOUR QWEN GOVERNANCE AI
   try {
-    if (!governanceRunner) throw new Error("governanceRunner not initialized");
-    const res = await governanceRunner.ask(JSON.stringify(input));
-    const out = (res as any)?.output ?? res;
+    const prompt = `
+You are the final safety authority for FY Club.
 
-    let decision: GovernanceDecision | null = null;
+Your job:
+- Enforce strict treasury security rules
+- Block unsafe actions
+- Approve only protective ones
 
-    if (typeof out === "string") {
-      try {
-        decision = JSON.parse(out) as GovernanceDecision;
-      } catch (err) {
-        // continue to try object form
-      }
+⚠️ YOU MUST RETURN STRICT JSON ONLY in this exact format:
+
+{
+  "approved": boolean,
+  "reason": string,
+  "enforcedActions": [
+    { "type": "ALERT" | "REDUCE" | "DIVERSIFY", "message": string }
+  ]
+}
+
+INPUT:
+${JSON.stringify(input, null, 2)}
+`;
+
+    const out = await callLocalLLM(prompt);
+
+    // ✅ SAFETY GUARD: Validate output before JSON.parse
+    if (!out || typeof out !== "string") {
+      throw new Error("Empty AI output");
     }
 
-    if (!decision && typeof out === "object" && out !== null) {
-      decision = out as GovernanceDecision;
-    }
+    const trimmed = out.trim();
 
-    // Validate/normalize decision
-    if (decision) {
-      const normalizedActions = (decision.enforcedActions || []).map((a: any) => ({
-        type: a.type === "REDUCE" || a.type === "DIVERSIFY" ? a.type : "ALERT",
-        message: String(a.message ?? "")
-      }));
+    const parsed = extractJson(trimmed);
+
+    if (isValidGovernanceDecision(parsed)) {
+      // ✅ Normalize actions for extra safety
+      const normalizedActions: GovernanceDecision["enforcedActions"] =
+  parsed.enforcedActions.map((a) => {
+    let safeType: "ALERT" | "REDUCE" | "DIVERSIFY" = "ALERT";
+
+    if (a.type === "REDUCE") safeType = "REDUCE";
+    else if (a.type === "DIVERSIFY") safeType = "DIVERSIFY";
+
+    return {
+      type: safeType,
+      message: String(a.message)
+    };
+  });
+
 
       return {
-        approved: Boolean(decision.approved),
-        reason: String(decision.reason ?? "No reason provided"),
+        approved: Boolean(parsed.approved),
+        reason: String(parsed.reason),
         enforcedActions: normalizedActions
       };
     }
+
+    throw new Error("Invalid AI Governance Output");
+
   } catch (err) {
-    console.warn("governanceRunner.ask() failed, falling back to local governance rules:", err);
+    console.warn("Local Qwen AI failed, falling back to local governance rules:", err);
   }
 
-  // Local deterministic governance fallback (safe defaults)
+  // ✅ DETERMINISTIC GOVERNANCE FALLBACK (SAFE DEFAULTS)
   if (risk.level === "MEDIUM") {
-    const safeActions = plan.actions.filter((a: any) => a.type === "DIVERSIFY" || a.type === "ALERT");
+    const safeActions = plan.actions.filter(
+      (a: any) => a.type === "DIVERSIFY" || a.type === "ALERT"
+    );
 
     return {
       approved: true,

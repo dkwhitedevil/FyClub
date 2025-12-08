@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node -r dotenv/config ./node_modules/.bin/tsx src/test.ts",
+    "test": "tsx src/test.ts",
     "dev": "tsx watch src/test.ts"
   },
   "keywords": [],

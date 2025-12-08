@@ -1,23 +1,24 @@
-import "dotenv/config"; 
-import { initRiskAgent, analyzeRisk } from "./agents/riskAgent.ts";
-import { initPlannerAgent, generateProtectionPlan } from "./agents/plannerAgent.ts";
-import { initGovernanceAgent, enforceGovernance } from "./agents/governanceAgent.ts";
+import "dotenv/config";
+import { analyzeRisk } from "./agents/riskAgent.ts";
+import { generateProtectionPlan } from "./agents/plannerAgent.ts";
+import { enforceGovernance } from "./agents/governanceAgent.ts";
 import { watchTreasury } from "./agents/watcherAgent.ts";
 
-await initRiskAgent();
-await initPlannerAgent();
-await initGovernanceAgent();
+console.log("✅ Starting FY Club Treasury Governance Test\n");
 
 const wallet = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
 
 const snapshot = await watchTreasury(wallet);
-console.log("TREASURY:", snapshot);
+console.log("📊 TREASURY SNAPSHOT:", snapshot);
+console.log();
 
 const risk = await analyzeRisk(snapshot);
-console.log("RISK:", risk);
+console.log("⚠️  RISK ANALYSIS:", risk);
+console.log();
 
 const plan = await generateProtectionPlan(risk);
-console.log("PLAN:", plan);
+console.log("📋 PROTECTION PLAN:", plan);
+console.log();
 
 const decision = await enforceGovernance({
   risk,
@@ -25,4 +26,5 @@ const decision = await enforceGovernance({
   totalUsdValue: snapshot.totalUsdValue
 });
 
-console.log("FINAL GOVERNANCE DECISION:", decision);
+console.log("✅ FINAL GOVERNANCE DECISION:", decision);
+console.log("\n✅ Test completed successfully!");

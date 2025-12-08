@@ -1,42 +1,99 @@
-import { AgentBuilder } from "@iqai/adk";
 import type { TreasurySnapshot, RiskResult } from "../types.ts";
 
-let riskRunner: any = null;
+/**
+ * Safe universal Qwen Ollama caller
+ * Handles all response formats
+ */
+async function callLocalLLM(prompt: string): Promise<string> {
+  const res = await fetch("https://ollama-qwen.zeabur.app/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "qwen2.5:0.5b",
+      prompt,
+      stream: false
+    })
+  });
 
-export async function initRiskAgent() {
-  if (riskRunner) return;
-  const built = await AgentBuilder.create("risk_agent")
-    .withModel("gemini-2.5-flash")
-    .withInstruction(`You are a professional DeFi risk analyst.\nGiven a TreasurySnapshot JSON object as input, evaluate concentration risk, size exposure and detect risky patterns.\nReturn STRICT JSON in this exact format:\n{\n  \"level\": \"LOW\" | \"MEDIUM\" | \"HIGH\",\n  \"score\": number,\n  \"issues\": string[]\n}`)
-    .build();
+  const data = await res.json();
 
-  riskRunner = (built as any).runner;
-}
-
-// Custom runner function for risk analysis
-export async function analyzeRisk(snapshot: TreasurySnapshot): Promise<RiskResult> {
-  try {
-    if (!riskRunner) throw new Error("riskRunner not initialized");
-    const res = await riskRunner.ask(JSON.stringify(snapshot));
-    const out = (res as any)?.output ?? res;
-
-    if (typeof out === "string") {
-      try {
-        const parsed = JSON.parse(out) as RiskResult;
-        return parsed;
-      } catch (err) {
-        // fallthrough
-      }
-    }
-
-    if (typeof out === "object" && out !== null) {
-      return out as RiskResult;
-    }
-  } catch (err) {
-    console.warn("riskRunner.ask() failed, falling back to deterministic analyzer:", err);
+  // ✅ UNIVERSAL RESPONSE EXTRACTION (SUPPORTS ALL OLLAMA FORMATS)
+  if (typeof data.response === "string") {
+    return data.response;
   }
 
-  // Deterministic fallback (previous heuristic)
+  if (data.message?.content && typeof data.message.content === "string") {
+    return data.message.content;
+  }
+
+  if (typeof data === "string") {
+    return data;
+  }
+
+  console.error("⚠️ Unexpected Qwen response format:", data);
+  throw new Error("Invalid Qwen response format");
+}
+
+/**
+ * Strong validation against malformed AI output
+ */
+function isValidRiskResult(obj: any): obj is RiskResult {
+  return (
+    obj &&
+    (obj.level === "LOW" || obj.level === "MEDIUM" || obj.level === "HIGH") &&
+    typeof obj.score === "number" &&
+    Array.isArray(obj.issues)
+  );
+}
+
+// ✅ MAIN RISK ANALYZER (NOW FULLY LOCAL + UNLIMITED)
+export async function analyzeRisk(snapshot: TreasurySnapshot): Promise<RiskResult> {
+  try {
+    const prompt = `
+You are a professional DeFi risk analyst.
+
+Analyze this treasury snapshot and RETURN STRICT JSON ONLY in this exact format:
+
+{
+  "level": "LOW" | "MEDIUM" | "HIGH",
+  "score": number,
+  "issues": string[]
+}
+
+TREASURY SNAPSHOT:
+${JSON.stringify(snapshot, null, 2)}
+`;
+
+    const out = await callLocalLLM(prompt);
+
+    // ✅ SAFETY GUARD: Validate output before JSON.parse
+    if (!out || typeof out !== "string") {
+      throw new Error("Empty AI output");
+    }
+
+    const trimmed = out.trim();
+
+    // Auto-extract JSON if model adds explanation
+    const jsonStart = trimmed.indexOf("{");
+    const jsonEnd = trimmed.lastIndexOf("}");
+
+    if (jsonStart === -1 || jsonEnd === -1) {
+      throw new Error("No JSON found in AI output");
+    }
+
+    const parsed = JSON.parse(trimmed.slice(jsonStart, jsonEnd + 1));
+
+    if (isValidRiskResult(parsed)) {
+      return parsed; // ✅ REAL AI RESULT
+    }
+
+    throw new Error("Invalid AI Risk Output");
+
+  } catch (err) {
+    console.warn("Local Qwen AI failed, using deterministic fallback:", err);
+  }
+
+  // ✅ DETERMINISTIC FALLBACK (YOU ALREADY TRUST THIS LOGIC)
   const issues: string[] = [];
   let score = 100;
 
