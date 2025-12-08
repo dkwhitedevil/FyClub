@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "tsx src/test.ts",
+    "test": "node -r dotenv/config ./node_modules/.bin/tsx src/test.ts",
     "dev": "tsx watch src/test.ts"
   },
   "keywords": [],
@@ -13,11 +13,12 @@
   "type": "module",
   "dependencies": {
     "@iqai/adk": "^0.5.7",
+    "dotenv": "^17.2.3",
     "ethers": "^6.16.0",
     "zod": "^4.1.13"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
-    "tsx": "^4.7.0"
+    "tsx": "^4.7.0",
+    "typescript": "^5.9.3"
   }
 }

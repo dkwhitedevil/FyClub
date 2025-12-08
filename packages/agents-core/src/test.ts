@@ -1,59 +1,28 @@
+import "dotenv/config"; 
+import { initRiskAgent, analyzeRisk } from "./agents/riskAgent.ts";
+import { initPlannerAgent, generateProtectionPlan } from "./agents/plannerAgent.ts";
+import { initGovernanceAgent, enforceGovernance } from "./agents/governanceAgent.ts";
 import { watchTreasury } from "./agents/watcherAgent.ts";
-import { analyzeRisk } from "./agents/riskAgent.ts";
-import { generateProtectionPlan } from "./agents/plannerAgent.ts";
-import { enforceGovernance } from "./agents/governanceAgent.ts";
 
-// ✅ Use ANY public wallet (you do NOT need your own funds)
-const TEST_WALLET = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e"; // Ethereum whale
+await initRiskAgent();
+await initPlannerAgent();
+await initGovernanceAgent();
 
-async function runFullTest() {
-  console.log("\n==============================");
-  console.log("🥊 FY CLUB — FULL AI FLOW TEST");
-  console.log("==============================\n");
+const wallet = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
 
-  try {
-    // ✅ STEP 1: WATCHER → Read On-Chain Treasury
-    console.log("🔍 STEP 1: Reading Treasury...");
-    const snapshot = await watchTreasury(TEST_WALLET);
+const snapshot = await watchTreasury(wallet);
+console.log("TREASURY:", snapshot);
 
-    console.log("✅ Treasury Snapshot:");
-    console.log(JSON.stringify(snapshot, null, 2), "\n");
+const risk = await analyzeRisk(snapshot);
+console.log("RISK:", risk);
 
-    // ✅ STEP 2: RISK AGENT → Analyze Risk
-    console.log("📊 STEP 2: Analyzing Risk...");
-    const risk = await analyzeRisk(snapshot);
+const plan = await generateProtectionPlan(risk);
+console.log("PLAN:", plan);
 
-    console.log("✅ Risk Analysis:");
-    console.log(JSON.stringify(risk, null, 2), "\n");
+const decision = await enforceGovernance({
+  risk,
+  plan,
+  totalUsdValue: snapshot.totalUsdValue
+});
 
-    // ✅ STEP 3: PLANNER → Generate Protection Plan
-    console.log("🛡️ STEP 3: Generating Protection Strategy...");
-    const plan = await generateProtectionPlan(risk);
-
-    console.log("✅ Protection Plan:");
-    console.log(JSON.stringify(plan, null, 2), "\n");
-
-    // ✅ STEP 4: GOVERNANCE → Final Approval / Block
-    console.log("⚖️ STEP 4: Applying Governance Rules...");
-    const governanceDecision = await enforceGovernance({
-      risk,
-      plan,
-      totalUsdValue: snapshot.totalUsdValue
-    });
-
-    console.log("✅ Governance Decision:");
-    console.log(JSON.stringify(governanceDecision, null, 2), "\n");
-
-    // ✅ FINAL SUMMARY
-    console.log("==============================");
-    console.log("✅ FY CLUB FULL FLOW COMPLETE");
-    console.log("==============================");
-
-  } catch (error) {
-    console.error("\n❌ FY CLUB TEST FAILED");
-    console.error(error);
-  }
-}
-
-// ✅ RUN THE TEST
-runFullTest();
+console.log("FINAL GOVERNANCE DECISION:", decision);

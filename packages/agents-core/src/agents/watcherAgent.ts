@@ -3,7 +3,7 @@ import { ethers } from "ethers";
 import type { TreasurySnapshot } from "../types.ts";
 
 // Use a free public RPC endpoint (no auth required)
-const RPC_URL = process.env.RPC_URL || "https://eth.llamarpc.com";
+const RPC_URL = process.env.RPC_URL || "https://eth.llamarpc.com"; // Updated to public endpoint
 
 export const watcherAgent = new LlmAgent({
   name: "watcher_agent",
