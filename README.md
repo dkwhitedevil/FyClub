@@ -16,11 +16,11 @@ This project is submitted to the **AGENT ARENA – AI Agent Hackathon**, a globa
 
 ### What Makes FY Club Perfect for This Hackathon
 
-✅ Built entirely with **ADK-TS** (Agent Development Kit – TypeScript)
-✅ Multi-agent AI system for autonomous decision-making
-✅ Deployed on **ATP** (Agent Tokenization Platform)
-✅ On-chain security agent with real-world DeFi impact
-✅ Production-ready monorepo architecture
+✅ Built entirely with **ADK-TS** (Agent Development Kit – TypeScript)       
+✅ Multi-agent AI system for autonomous decision-making             
+✅ Deployed on **ATP** (Agent Tokenization Platform)            
+✅ On-chain security agent with real-world DeFi impact           
+✅ Production-ready monorepo architecture         
 ✅ Fully open-source and transparent
 
 ---
