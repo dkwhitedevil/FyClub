@@ -21,7 +21,7 @@ server.post("/api/risk-scan", async (request, reply) => {
       return reply.status(400).send({ error: "Treasury address is required" });
     }
 
-    const result = await runTreasuryWorkflow(address);
+    const resul = await runTreasuryWorkflow(address);
 
     return reply.send(result);
   } catch (err) {
