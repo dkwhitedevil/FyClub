@@ -181,6 +181,132 @@ FY Club runs a **multi-agent AI system** where each agent is specialized and aut
 
 ---
 
+## 🧠 Built with ADK-TS
+
+FY Club is **fully implemented using IQAI's Agent Development Kit for TypeScript (ADK-TS)**, the industry standard for building autonomous AI agents on blockchain.
+
+### ADK-TS Implementation
+
+Our four specialized agents are built using `AgentBuilder` pattern:
+
+```typescript
+// Example: Risk Analysis Agent using ADK-TS
+import { AgentBuilder } from "@iqai/adk";
+
+export async function initRiskAgent() {
+  return await AgentBuilder.create("risk_analysis_agent")
+    .withModel("qwen2.5")
+    .withInstruction("Analyze treasury concentration and financial risk...")
+    .build();
+}
+```
+
+### Agent Architecture
+
+Each agent follows the ADK-TS pattern:
+
+**1. Watcher Agent** – Real-time Treasury Monitor
+```typescript
+import { AgentBuilder } from "@iqai/adk";
+// Fetches on-chain data using RPC calls
+// Validates treasury balances and positions
+// Returns structured TreasurySnapshot
+```
+
+**2. Risk Agent** – Autonomous Risk Analyzer
+```typescript
+// Uses ADK-TS AgentBuilder for LLM decision-making
+// Analyzes concentration, diversification, and size risk
+// Generates risk scores with deterministic fallbacks
+// Returns RiskResult with level (LOW/MEDIUM/HIGH)
+```
+
+**3. Planner Agent** – Protection Strategy Generator
+```typescript
+// Generates mitigation actions based on risk assessment
+// Returns structured ProtectionPlan with action types:
+// - ALERT: Notify operators
+// - REDUCE: Lower exposure
+// - DIVERSIFY: Add assets
+```
+
+**4. Governance Agent** – Policy Enforcer
+```typescript
+// Final safety decision-maker
+// Enforces hard rules: HIGH risk + large treasury = BLOCKED
+// Uses ADK-TS LLM with deterministic fallbacks
+// Returns GovernanceDecision with approval/block reasoning
+```
+
+### LLM Integration with ADK-TS
+
+FY Club uses a **LLM + Deterministic Fallback Pattern**:
+
+```typescript
+// ADK Agent calls LLM (Qwen model)
+const llmResponse = await callQwenLLM(prompt);
+
+// Robust JSON extraction from LLM response
+const parsed = extractJSON<RiskResult>(llmResponse);
+
+// Validates structure and types
+if (validated) {
+  return llmResult;
+}
+
+// Falls back to deterministic logic if LLM response malformed
+return treasuryTools.generateBaseRisk(snapshot);
+```
+
+### Tools & Capabilities
+
+ADK-TS agents leverage custom tools:
+
+```typescript
+export const treasuryTools = {
+  analyzeConcentration: (snapshot) => {...},
+  analyzeSizeExposure: (totalValue) => {...},
+  generateBaseRisk: (snapshot) => {...}
+};
+```
+
+### Multi-Agent Orchestration Workflow
+
+All agents are orchestrated in a **sequential decision pipeline** using ADK-TS:
+
+```typescript
+export async function runTreasuryWorkflow(address: string) {
+  // 1. Initialize all ADK agents
+  await initRiskAgent();
+  await initPlannerAgent();
+  await initGovernanceAgent();
+
+  // 2. Run sequential pipeline
+  const snapshot = await watchTreasury(address);        // Watcher
+  const risk = await analyzeRisk(snapshot);             // Risk Agent (ADK)
+  const plan = await generateProtectionPlan(risk);      // Planner Agent (ADK)
+  const governance = await enforceGovernance({...});    // Governance Agent (ADK)
+
+  return { snapshot, risk, plan, governance };
+}
+```
+
+### Why ADK-TS?
+
+- ✅ **Native TypeScript support** – Full type safety across agent ecosystem
+- ✅ **AgentBuilder pattern** – Declarative, composable agent definitions
+- ✅ **LLM flexibility** – Supports Gemini, GPT-4, Claude, custom models
+- ✅ **Production-ready** – Error handling, timeouts, retries built-in
+- ✅ **ATP compatible** – Agents launch directly on IQAI's ATP platform
+- ✅ **Deterministic fallbacks** – Never fails completely, always returns valid decisions
+- ✅ **Tool integration** – Seamless blockchain and external API access
+
+### Deployment Ready
+
+FY Club's ADK-TS agents are ready for **ATP (Agent Tokenization Platform)** deployment, where they will operate as autonomous, tokenized agents on IQAI's infrastructure.
+
+---
+
 ## 🛠️ Tech Stack
 
 ### Frontend
