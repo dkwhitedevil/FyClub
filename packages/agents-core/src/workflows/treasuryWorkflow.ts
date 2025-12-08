@@ -1,25 +1,47 @@
 import { watchTreasury } from "../agents/watcherAgent.ts";
-import { analyzeRisk } from "../agents/riskAgent.ts";
-import { generateProtectionPlan } from "../agents/plannerAgent.ts";
-import { enforceGovernance } from "../agents/governanceAgent.ts";
+import { analyzeRisk, initRiskAgent } from "../agents/riskAgent.ts";
+import { generateProtectionPlan, initPlannerAgent } from "../agents/plannerAgent.ts";
+import { enforceGovernance, initGovernanceAgent } from "../agents/governanceAgent.ts";
+
+/**
+ * Treasury Governance Workflow using ADK Agents
+ * Orchestrates the complete on-chain treasury analysis and protection pipeline
+ */
 
 export async function runTreasuryWorkflow(address: string) {
   try {
-    // 1. Read real on-chain treasury
+    console.log("🚀 Starting Treasury Governance Workflow (ADK-driven)");
+
+    // ✅ Initialize all ADK agents
+    await initRiskAgent();
+    await initPlannerAgent();
+    await initGovernanceAgent();
+
+    // 1. Watch Treasury (Real On-Chain Data)
+    console.log("1️⃣  Reading on-chain treasury...");
     const snapshot = await watchTreasury(address);
+    console.log("✅ Treasury snapshot acquired");
 
-    // 2. AI / fallback risk analysis
+    // 2. Risk Analysis (ADK Agent)
+    console.log("2️⃣  Analyzing risk with ADK Risk Agent...");
     const risk = await analyzeRisk(snapshot);
+    console.log(`✅ Risk Level: ${risk.level} (Score: ${risk.score}/100)`);
 
-    // 3. AI / fallback protection planning
+    // 3. Protection Planning (ADK Agent)
+    console.log("3️⃣  Generating protection plan with ADK Planner Agent...");
     const plan = await generateProtectionPlan(risk);
+    console.log(`✅ Generated ${plan.actions.length} protection actions`);
 
-    // 4. Final AI / rule-based governance enforcement
+    // 4. Governance Enforcement (ADK Agent)
+    console.log("4️⃣  Enforcing governance with ADK Governance Agent...");
     const governance = await enforceGovernance({
       risk,
       plan,
       totalUsdValue: snapshot.totalUsdValue
     });
+    console.log(`✅ Governance Decision: ${governance.approved ? "APPROVED" : "BLOCKED"}`);
+
+    console.log("✅ Treasury Governance Workflow Complete (ADK Pipeline)\n");
 
     return {
       snapshot,
@@ -28,9 +50,9 @@ export async function runTreasuryWorkflow(address: string) {
       governance
     };
   } catch (err) {
-    console.error("Treasury workflow failed:", err);
+    console.error("❌ Workflow error:", err);
 
-    // ✅ Safe emergency fallback (never breaks UI/backend)
+    // ✅ Emergency fallback (never breaks)
     return {
       snapshot: null,
       risk: {

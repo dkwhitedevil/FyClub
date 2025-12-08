@@ -1,119 +1,89 @@
+import { AgentBuilder } from "@iqai/adk";
 import type { TreasurySnapshot, RiskResult } from "../types.ts";
+import { callQwenLLM, extractJSON, treasuryTools } from "../tools/treasuryTools.ts";
 
 /**
- * Safe universal Qwen Ollama caller
- * Handles all response formats
+ * Risk Analysis Agent using ADK
+ * Evaluates DeFi treasury risk using LLM + deterministic fallbacks
  */
-async function callLocalLLM(prompt: string): Promise<string> {
-  const res = await fetch("https://ollama-qwen.zeabur.app/api/generate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "qwen2.5:0.5b",
-      prompt,
-      stream: false
-    })
-  });
 
-  const data = await res.json();
+let riskAgent: any = null;
+let riskRunner: any = null;
 
-  // ✅ UNIVERSAL RESPONSE EXTRACTION (SUPPORTS ALL OLLAMA FORMATS)
-  if (typeof data.response === "string") {
-    return data.response;
-  }
+export async function initRiskAgent() {
+  if (riskAgent && riskRunner) return;
 
-  if (data.message?.content && typeof data.message.content === "string") {
-    return data.message.content;
-  }
-
-  if (typeof data === "string") {
-    return data;
-  }
-
-  console.error("⚠️ Unexpected Qwen response format:", data);
-  throw new Error("Invalid Qwen response format");
-}
-
-/**
- * Strong validation against malformed AI output
- */
-function isValidRiskResult(obj: any): obj is RiskResult {
-  return (
-    obj &&
-    (obj.level === "LOW" || obj.level === "MEDIUM" || obj.level === "HIGH") &&
-    typeof obj.score === "number" &&
-    Array.isArray(obj.issues)
-  );
-}
-
-// ✅ MAIN RISK ANALYZER (NOW FULLY LOCAL + UNLIMITED)
-export async function analyzeRisk(snapshot: TreasurySnapshot): Promise<RiskResult> {
-  try {
-    const prompt = `
-You are a professional DeFi risk analyst.
-
-Analyze this treasury snapshot and RETURN STRICT JSON ONLY in this exact format:
-
+  // ✅ Build agent using ADK AgentBuilder
+  const built = await AgentBuilder.create("risk_analysis_agent")
+    .withModel("qwen2.5")
+    .withInstruction(
+      `You are a professional DeFi risk analyst agent.
+Analyze the treasury snapshot and provide a risk assessment.
+Consider concentration risk, asset diversification, and treasury size.
+Return STRICT JSON ONLY:
 {
   "level": "LOW" | "MEDIUM" | "HIGH",
-  "score": number,
+  "score": number (0-100),
   "issues": string[]
+}`
+    )
+    .build();
+
+  riskAgent = built;
+  riskRunner = (built as any).runner;
+  console.log("✅ Risk Agent initialized (ADK AgentBuilder)");
 }
 
-TREASURY SNAPSHOT:
-${JSON.stringify(snapshot, null, 2)}
-`;
-
-    const out = await callLocalLLM(prompt);
-
-    // ✅ SAFETY GUARD: Validate output before JSON.parse
-    if (!out || typeof out !== "string") {
-      throw new Error("Empty AI output");
+export async function analyzeRisk(snapshot: TreasurySnapshot): Promise<RiskResult> {
+  try {
+    // Ensure agent is initialized
+    if (!riskRunner) {
+      await initRiskAgent();
     }
 
-    const trimmed = out.trim();
+    // ✅ Use ADK runner to invoke LLM with clear risk analysis prompt
+    const positionCount = snapshot.positions.length;
+    const avgPositionSize = snapshot.totalUsdValue / Math.max(1, positionCount);
+    
+    const prompt = `TASK: Analyze treasury concentration and risk level.
 
-    // Auto-extract JSON if model adds explanation
-    const jsonStart = trimmed.indexOf("{");
-    const jsonEnd = trimmed.lastIndexOf("}");
+TREASURY METRICS:
+- Total USD Value: $${snapshot.totalUsdValue.toFixed(2)}
+- Number of positions: ${positionCount}
+- Assets held: ${snapshot.positions.map((p) => `${p.token}`).join(", ")}
+- Average position size: $${avgPositionSize.toFixed(2)}
 
-    if (jsonStart === -1 || jsonEnd === -1) {
-      throw new Error("No JSON found in AI output");
+RISK ANALYSIS FRAMEWORK:
+1. CONCENTRATION RISK: 1 position = 40 points, 2-3 = 20 points, 4+ = 0 points
+2. ASSET DIVERSIFICATION: All same token = 25 points, mixed = 0 points
+3. SIZE IMPACT: >$10M = 30 points, $1-10M = 25 points, <$1M = 5 points
+4. Total score = 100 - (points from above). Score > 70 = LOW risk, 40-70 = MEDIUM, <40 = HIGH
+
+OUTPUT ONLY THIS JSON:
+{"level":"LOW"|"MEDIUM"|"HIGH","score":0-100,"issues":["specific risk found"]}`;
+
+    const response = await callQwenLLM(prompt);
+    console.log("[DEBUG] Raw LLM response:", response);
+
+    const parsed = extractJSON<RiskResult>(response);
+
+    // Validate structure
+    if (
+      parsed.level &&
+      ["LOW", "MEDIUM", "HIGH"].includes(parsed.level) &&
+      typeof parsed.score === "number" &&
+      Array.isArray(parsed.issues)
+    ) {
+      console.log("✅ Risk assessment from LLM");
+      return parsed;
     }
-
-    const parsed = JSON.parse(trimmed.slice(jsonStart, jsonEnd + 1));
-
-    if (isValidRiskResult(parsed)) {
-      return parsed; // ✅ REAL AI RESULT
-    }
-
-    throw new Error("Invalid AI Risk Output");
-
   } catch (err) {
-    console.warn("Local Qwen AI failed, using deterministic fallback:", err);
+    console.warn("⚠️ LLM risk analysis failed, using deterministic fallback:", err);
   }
 
-  // ✅ DETERMINISTIC FALLBACK (YOU ALREADY TRUST THIS LOGIC)
-  const issues: string[] = [];
-  let score = 100;
-
-  if (snapshot.totalUsdValue > 100000) {
-    issues.push("Large treasury exposure detected.");
-    score -= 25;
-  }
-
-  if (snapshot.positions.length === 1) {
-    issues.push("Treasury fully concentrated in a single asset.");
-    score -= 40;
-  }
-
-  let level: RiskResult["level"] = "LOW";
-  if (score < 70) level = "MEDIUM";
-  if (score < 40) level = "HIGH";
-
-  return {
-    level,
-    score,
-    issues
-  };
+  // ✅ ADK-style deterministic fallback
+  const baseRisk = treasuryTools.generateBaseRisk(snapshot);
+  console.log("✅ Risk assessment from deterministic tool");
+  return baseRisk;
 }
+

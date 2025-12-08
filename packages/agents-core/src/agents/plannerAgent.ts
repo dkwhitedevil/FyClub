@@ -1,119 +1,96 @@
+import { AgentBuilder } from "@iqai/adk";
 import type { RiskResult, ProtectionPlan } from "../types.ts";
+import { callQwenLLM, extractJSON } from "../tools/treasuryTools.ts";
 
 /**
- * Safe universal Qwen Ollama caller
- * Handles all response formats
+ * Protection Planning Agent using ADK
+ * Generates mitigation strategies based on risk assessment
  */
-async function callLocalLLM(prompt: string): Promise<string> {
-  const res = await fetch("https://ollama-qwen.zeabur.app/api/generate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "qwen2.5:0.5b",
-      prompt,
-      stream: false
-    })
-  });
 
-  const data = await res.json();
+let plannerAgent: any = null;
+let plannerRunner: any = null;
 
-  // ✅ UNIVERSAL RESPONSE EXTRACTION (SUPPORTS ALL OLLAMA FORMATS)
-  if (typeof data.response === "string") {
-    return data.response;
-  }
+export async function initPlannerAgent() {
+  if (plannerAgent && plannerRunner) return;
 
-  if (data.message?.content && typeof data.message.content === "string") {
-    return data.message.content;
-  }
+  // ✅ Build agent using ADK AgentBuilder
+  const built = await AgentBuilder.create("protection_planner_agent")
+    .withModel("qwen2.5")
+    .withInstruction(
+      `You are a DeFi treasury protection strategist.
+Based on risk assessment, create a protection plan using only:
+- ALERT: notify operators
+- REDUCE: reduce risky exposure
+- DIVERSIFY: diversify across assets
 
-  if (typeof data === "string") {
-    return data;
-  }
-
-  console.error("⚠️ Unexpected Qwen response format:", data);
-  throw new Error("Invalid Qwen response format");
-}
-
-/**
- * Extract JSON from markdown-wrapped or text-surrounded JSON
- * Handles: ```json {...} ```, raw {...}, and text with embedded JSON
- */
-function extractJson(text: string): any {
-  const cleaned = text
-    .replace(/```json/g, "")
-    .replace(/```/g, "")
-    .trim();
-
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-
-  if (start === -1 || end === -1) {
-    throw new Error("No JSON object found in AI output");
-  }
-
-  const jsonString = cleaned.slice(start, end + 1);
-  return JSON.parse(jsonString);
-}
-
-/**
- * Strong validation against malformed AI output
- */
-function isValidProtectionPlan(obj: any): obj is ProtectionPlan {
-  return (
-    obj &&
-    Array.isArray(obj.actions) &&
-    obj.actions.every(
-      (a: any) =>
-        a &&
-        (a.type === "ALERT" || a.type === "REDUCE" || a.type === "DIVERSIFY") &&
-        typeof a.message === "string"
-    )
-  );
-}
-
-// ✅ MAIN PLANNER (NOW FULLY LOCAL + UNLIMITED)
-export async function generateProtectionPlan(risk: RiskResult): Promise<ProtectionPlan> {
-  try {
-    const prompt = `
-You are a DeFi treasury strategist.
-
-Based on the given RiskResult, create a protection plan using ONLY:
-- ALERT
-- REDUCE
-- DIVERSIFY
-
-⚠️ YOU MUST RETURN STRICT JSON ONLY in this exact format:
-
+Return STRICT JSON ONLY:
 {
   "actions": [
     { "type": "ALERT" | "REDUCE" | "DIVERSIFY", "message": string }
   ]
+}`
+    )
+    .build();
+
+  plannerAgent = built;
+  plannerRunner = (built as any).runner;
+  console.log("✅ Planner Agent initialized (ADK AgentBuilder)");
 }
 
-RISK RESULT:
-${JSON.stringify(risk, null, 2)}
-`;
-
-    const out = await callLocalLLM(prompt);
-
-    const parsed = extractJson(out);
-
-    if (isValidProtectionPlan(parsed)) {
-      return parsed; // ✅ REAL AI RESULT
+export async function generateProtectionPlan(risk: RiskResult): Promise<ProtectionPlan> {
+  try {
+    // Ensure agent is initialized
+    if (!plannerRunner) {
+      await initPlannerAgent();
     }
 
-    throw new Error("Invalid AI Protection Plan Output");
+    // ✅ Use ADK runner with specific protection strategy prompt
+    const prompt = `TASK: Design protection strategy based on detected risks.
 
+CURRENT RISK ASSESSMENT:
+- Risk Level: ${risk.level}
+- Risk Score: ${risk.score}/100
+- Identified Issues: ${risk.issues.join(" | ")}
+
+STRATEGY GUIDELINES:
+- HIGH risk: Always recommend ALERT (notify) and REDUCE (cut exposure)
+- MEDIUM risk: Recommend DIVERSIFY (spread assets) and ALERT
+- LOW risk: Recommend light DIVERSIFY or no action needed
+
+ACTION TYPES:
+- ALERT: Notify treasury managers of risks
+- REDUCE: Lower exposure to risky positions
+- DIVERSIFY: Add more assets to spread risk
+
+OUTPUT ONLY THIS JSON:
+{"actions":[{"type":"ALERT"|"REDUCE"|"DIVERSIFY","message":"specific action description"}]}`;
+
+    const response = await callQwenLLM(prompt);
+    console.log("[DEBUG] Raw Planner LLM response:", response);
+
+    const parsed = extractJSON<ProtectionPlan>(response);
+
+    // Validate structure
+    if (
+      Array.isArray(parsed.actions) &&
+      parsed.actions.every(
+        (a: any) =>
+          a.type && ["ALERT", "REDUCE", "DIVERSIFY"].includes(a.type) && a.message
+      )
+    ) {
+      console.log("✅ Protection plan from LLM");
+      return parsed;
+    }
   } catch (err) {
-    console.warn("Local Qwen AI failed, using deterministic planner:", err);
+    console.warn("⚠️ LLM planner failed, using deterministic fallback:", err);
   }
 
-  // ✅ DETERMINISTIC FALLBACK (UNCHANGED, SAFE)
+  // ✅ ADK-style deterministic fallback
   const actions: Array<{ type: "ALERT" | "REDUCE" | "DIVERSIFY"; message: string }> = [];
 
   if (risk.level === "HIGH") {
     actions.push({ type: "ALERT", message: "Immediate risk detected. Manual review required." });
-    actions.push({ type: "REDUCE", message: "Reduce high exposure positions immediately." });
+    actions.push({ type: "REDUCE", message: "Reduce high-risk exposure positions immediately." });
   }
 
   if (risk.level === "MEDIUM") {
@@ -121,8 +98,9 @@ ${JSON.stringify(risk, null, 2)}
   }
 
   if (risk.level === "LOW") {
-    actions.push({ type: "ALERT", message: "Treasury is currently stable." });
+    actions.push({ type: "ALERT", message: "Treasury is stable. Monitor regularly." });
   }
 
+  console.log("✅ Protection plan from deterministic fallback");
   return { actions };
 }
