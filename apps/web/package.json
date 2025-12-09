@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "preinstall": "npm config set fetch-retries 5 && npm config set fetch-retry-maxtimeout 120000 && npm config set fetch-retry-mintimeout 20000",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
