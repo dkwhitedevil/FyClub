@@ -84,8 +84,9 @@ export default function LandingPage() {
           <div className="relative flex justify-center">
             <div className="relative w-[400px] h-[400px] border-4 border-black shadow-[10px_10px_0px_#000] bg-white flex items-center justify-center">
               <Image
-                src="/logo.png"
+                src="/logo1.png"
                 alt="FY Club Logo"
+                
                 fill
                 className="object-contain p-12"
                 priority
