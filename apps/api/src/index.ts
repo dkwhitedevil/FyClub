@@ -38,7 +38,7 @@ server.get("/health", async () => {
   return { status: "ok", service: "KRWQ Treasury Guardian API" };
 });
 
-const PORT = Number(process.env.PORT || 3001);
+const PORT = Number(process.env.PORT || 3002);
 
 server.listen({ port: PORT, host: "0.0.0.0" }).then(() => {
   console.log(`✅ API running on http://localhost:${PORT}`);

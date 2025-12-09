@@ -3,12 +3,12 @@ export default function Navbar() {
     <nav className="border-b-4 border-black bg-white px-8 py-6">
       <div className="mx-auto max-w-7xl flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="border-4 border-black bg-pink-500 px-3 py-1">
-            <h1 className="text-xl font-black text-white uppercase tracking-tighter">
-              FY Club
+          <div className="border-4 border-black bg-white px-3 py-1 shadow-[6px_6px_0_#ec4899]">
+            <h1 className="text-2xl md:text-3xl font-black text-pink-600 uppercase tracking-tighter">
+              FY CLUB
             </h1>
           </div>
-          <p className="text-xs font-bold uppercase tracking-wide text-gray-700">
+          <p className="text-[11px] md:text-xs font-semibold uppercase tracking-wide text-black opacity-90">
             AI Treasury Guardian
           </p>
         </div>
