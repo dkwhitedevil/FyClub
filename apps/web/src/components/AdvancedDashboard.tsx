@@ -14,6 +14,17 @@ export default function AdvancedDashboard({ result, onScan, loading }: Props) {
   const risk = result?.risk;
   const [exporting, setExporting] = useState(false);
 
+  const fmt = (v: any) => {
+    if (v === null || v === undefined) return "—";
+    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return String(v);
+    if (Array.isArray(v)) return v.map((it) => (typeof it === "object" ? JSON.stringify(it) : String(it))).join(", ");
+    try {
+      return JSON.stringify(v);
+    } catch (e) {
+      return String(v);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-8 space-y-8">
       {/* Top: Overview + Actions */}
@@ -239,8 +250,8 @@ export default function AdvancedDashboard({ result, onScan, loading }: Props) {
             <ol className="list-decimal pl-6 mt-2 text-sm">
               {result.plan.actions.map((a: any, i: number) => (
                 <li key={i} className="mb-2">
-                  <div className="font-semibold">{a.type}</div>
-                  <div className="text-sm text-gray-700">{a.message}</div>
+                  <div className="font-semibold">{fmt(a.type)}</div>
+                  <div className="text-sm text-gray-700">{fmt(a.message)}</div>
                 </li>
               ))}
             </ol>
