@@ -10,6 +10,10 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@iqai/adk": "^0.5.7"
   }
